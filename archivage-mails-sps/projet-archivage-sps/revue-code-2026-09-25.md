@@ -1,7 +1,22 @@
 # Revue du code — 25/09/2026
 
 Relecture de `src/ArchivageSPS.bas` et `src/pst_archive.py` au regard des règles de `CLAUDE.md`.
-Aucun code n'a été modifié. Chaque point est à valider avant d'être corrigé dans une nouvelle version.
+**Mise à jour du 25/09/2026 : corrections apportées dans la macro v1.9 et dans `pst_archive.py`.**
+
+| Point | État |
+|---|---|
+| 0 — version, nom de l'utilisateur, encodage | corrigé (v1.9 ; utilisateur et poste dans le journal et le diagnostic ; .bas en cp1252/CRLF) |
+| 1.1 — écrasement des mails et pièces jointes | corrigé : existence du fichier vérifiée juste avant l'écriture ; nom sans point ni espace final |
+| 1.2 / 1.3 — journal et diagnostic | corrigé : nom avec utilisateur et heure à la seconde, création seule (`adSaveCreateNotExist`), suffixe « (2) » si le nom est pris |
+| 1.4 — journal du script | corrigé : ouverture en `"x"` |
+| 2 — simulation qui surestime | corrigé : l'index est mis à jour aussi en simulation, avec la taille exacte |
+| 3 — images, .eml, sens Envoyés, dossiers exclus, ’ | aligné entre macro et script |
+| 3 — mail joint (.msg dans le mail) | **non aligné** : la macro l'enregistre, le script le signale |
+| 4 — mots-clés, correspondances en mots entiers, Œ, « RESTOS » | corrigé |
+| 5 — portabilité Windows du script | partiel : `racine_categorie` corrigé ; la racine du serveur reste `~/mnt` |
+| Photos .heic d'un mail multi-affaires | nouveau paramètre `COPIER_PHOTOS_MULTI_AFFAIRES = False` : photo signalée une fois dans le journal, non copiée |
+
+Le détail initial de la revue suit.
 
 ## 0. Version et format des fichiers reçus
 

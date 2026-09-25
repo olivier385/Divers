@@ -1,7 +1,22 @@
 Attribute VB_Name = "ArchivageSPS"
 '==============================================================================
 '  ARCHIVAGE DES MAILS ET PIECES JOINTES DE LA BOITE secretariat.sps
-'  Groupe DEGOUY - Pôle SPS - version 1.7 du 25/09/2026
+'  Groupe DEGOUY - Pôle SPS - version 1.9 du 25/09/2026
+'
+'  Nouveautés de la version 1.9 :
+'   - aucun fichier n'est jamais écrasé : existence vérifiée juste avant
+'     chaque écriture (mails, pièces jointes, journal, diagnostic) ;
+'   - journal et diagnostic nommés avec l'utilisateur Windows et l'heure à
+'     la seconde : chaque poste garde le sien ;
+'   - la simulation mémorise les fichiers « à copier » : un fichier présent
+'     dans plusieurs mails de la période n'est compté qu'une fois ;
+'   - un mail déjà archivé en .eml (script pst_archive.py) n'est pas repris ;
+'   - images intégrées (Content-ID) et images image* / logo* ignorées ;
+'   - photos (.heic, .jpg...) d'un mail qui cite plusieurs affaires :
+'     signalées dans le journal, non copiées (COPIER_PHOTOS_MULTI_AFFAIRES) ;
+'   - correspondances cherchées en mots entiers ; apostrophe ’ et Œ reconnus ;
+'   - liste des mots-clés du nom de fichier complétée (ICP, OUVERTURE,
+'     CSPS, PV DE REUNION...).
 '
 '  Rôle :
 '   - parcourt TOUS les dossiers de courrier de la boîte secretariat.sps
@@ -55,15 +70,19 @@ Private Const INCLURE_SOUS_DOSSIERS As Boolean = True
 Private Const TRAITER_ENVOYES As Boolean = True
 Private Const JOURNAL_DOSSIER As String = "U:\S.P.S. 26\_ARCHIVAGE MAILS"
 Private Const MAX_CHEMIN As Long = 250
+Private Const VERSION As String = "1.9"
+' Photos jointes à un mail qui cite plusieurs affaires : False = signalées dans le journal, non copiées
+Private Const COPIER_PHOTOS_MULTI_AFFAIRES As Boolean = False
 ' Mots-clés (objet ou adresse de l'expéditeur) -> n° d'affaire, pour les mails sans n° d'affaire.
-' Format : "mot-clé=7.AAAA.NNN;mot-clé=7.AAAA.NNN" (majuscules/minuscules indifférentes). À compléter.
+' Format : "mot-clé=7.AAAA.NNN;mot-clé=7.AAAA.NNN" (majuscules/minuscules et ponctuation indifférentes,
+' recherche en mots entiers). À compléter.
 Private Const CORRESPONDANCES As String = _
     "54 RUE DE ROMAINVILLE=7.2025.041;STEP CHAUMES=7.2023.463;PONT D'IVRY=7.2025.397;" & _
     "CHUGPN=7.2022.198;BONDOUFLE=7.2021.055;PONT AMAR=7.2021.455;hbarchitectes.fr=7.2021.455;" & _
     "BEAUDELAIRE=7.2026.019;BAUDELAIRE=7.2026.019;BILLETTES=7.2025.042;COLLEGE HONORE DE BALZAC=7.2023.002;" & _
     "FOYER PARIS DUMAS=7.2025.345;BLOMET=7.2019.347;atelierboteko=7.2019.347;GLACIERE=7.2022.500;" & _
     "MERCOEUR=7.2023.218;wao.paris=7.2023.218;STADE NAUTIQUE=7.2026.272;BD NEY=7.2021.105;" & _
-    "SAINT-BERNARD-DE-LA-CHAPELLE=7.2023.282;EPHE=7.2024.324;RESTO DU COEUR=7.2025.386;" & _
+    "SAINT-BERNARD-DE-LA-CHAPELLE=7.2023.282;EPHE=7.2024.324;RESTO DU COEUR=7.2025.386;RESTOS DU COEUR=7.2025.386;" & _
     "LEG SARTROUVILLE=7.2020.533;STATION FOCH=7.2024.384;CLICHY-SOUS-BOIS=7.2022.448;" & _
     "HOTEL DIEU=7.2018.194;LOURCINE=7.2023.437;RUE BERTHIER=7.2020.512"
 '------------------------------------------------------------------------------
@@ -75,7 +94,7 @@ Private cacheIndex As Object         ' chemin de dossier -> dictionnaire des nom
 Private journal As Collection
 Private dDebut As Date, dFin As Date
 Private nbMails As Long, nbMailsCopies As Long, nbPJ As Long, nbPJCopiees As Long
-Private nbDeja As Long, nbSansAffaire As Long, nbErreurs As Long, nbDossiers As Long
+Private nbDeja As Long, nbSansAffaire As Long, nbErreurs As Long, nbDossiers As Long, nbPhotos As Long
 
 '==============================================================================
 Public Sub LancerArchivage()
@@ -92,9 +111,11 @@ Public Sub LancerArchivage()
 
     dDebut = DateSerial(CInt(Left(DATE_DEBUT, 4)), CInt(Mid(DATE_DEBUT, 6, 2)), CInt(Right(DATE_DEBUT, 2)))
     dFin = DateSerial(CInt(Left(DATE_FIN, 4)), CInt(Mid(DATE_FIN, 6, 2)), CInt(Right(DATE_FIN, 2)))
-    nbMails = 0: nbMailsCopies = 0: nbPJ = 0: nbPJCopiees = 0: nbDeja = 0: nbSansAffaire = 0: nbErreurs = 0: nbDossiers = 0
+    nbMails = 0: nbMailsCopies = 0: nbPJ = 0: nbPJCopiees = 0: nbDeja = 0: nbSansAffaire = 0: nbErreurs = 0: nbDossiers = 0: nbPhotos = 0
 
     journal.Add "Date;Sens;Expéditeur;Objet;Affaire;Dossier affaire;Élément;Fichier;Destination;Statut;Dossier Outlook"
+    journal.Add ";;;;;;;;;" & Csv("VERSION " & VERSION & " - utilisateur " & Environ("USERNAME") & " - poste " & Environ("COMPUTERNAME") & _
+                IIf(SIMULATION, " - SIMULATION", " - COPIE RÉELLE")) & ";"
 
     If Dir(RACINE & "S.P.S. 26", vbDirectory) = "" Then
         MsgBox "Le lecteur " & RACINE & " n'est pas accessible (dossier « S.P.S. 26 » introuvable).", vbCritical
@@ -137,7 +158,7 @@ Public Sub LancerArchivage()
     Dim fichierJournal As String
     fichierJournal = EcrireJournal()
 
-    MsgBox "Version 1.7 - " & IIf(SIMULATION, "SIMULATION terminée (aucun fichier copié)", "Archivage terminé") & vbCrLf & vbCrLf & _
+    MsgBox "Version " & VERSION & " - " & IIf(SIMULATION, "SIMULATION terminée (aucun fichier copié)", "Archivage terminé") & vbCrLf & vbCrLf & _
            "Dossiers Outlook parcourus : " & nbDossiers & vbCrLf & _
            "Période : " & Format(dDebut, "dd/mm/yyyy") & " au " & Format(dFin - 1, "dd/mm/yyyy") & vbCrLf & _
            "Mails traités : " & nbMails & vbCrLf & _
@@ -146,6 +167,7 @@ Public Sub LancerArchivage()
            "Pièces jointes " & IIf(SIMULATION, "à copier", "copiées") & " : " & nbPJCopiees & vbCrLf & _
            "Déjà présents sur le serveur : " & nbDeja & vbCrLf & _
            "Mails sans n° d'affaire : " & nbSansAffaire & vbCrLf & _
+           "Photos de mails multi-affaires (à classer à la main) : " & nbPhotos & vbCrLf & _
            "Erreurs : " & nbErreurs & vbCrLf & vbCrLf & _
            "Durée : " & Format((Timer - t) / 60, "0.0") & " min" & vbCrLf & _
            "Journal : " & fichierJournal, vbInformation, "Archivage SPS"
@@ -287,6 +309,7 @@ Private Sub TraiterMail(ByVal m As Object, ByVal sens As String)
     Dim affaires As Collection, a As Variant, chemin As String
     Dim att As Object, nomPJ As String, cible As String, element As String
     Dim nPJ As Collection, dest As String, nomMail As String, cheminPJ As String, affPJ As String
+    Dim ext As String, taille As Long
 
     On Error GoTo Erreur
     objet = Nz(m.Subject)
@@ -321,15 +344,16 @@ Private Sub TraiterMail(ByVal m As Object, ByVal sens As String)
         dest = SousDossier(chemin, "06", "06_MAILS") & "\" & sens
         nomMail = Format(m.ReceivedTime, "yyyy-mm-dd hhnn") & " - " & NettoyerNom(objet)
         nomMail = Tronquer(dest, nomMail, ".msg")
-        If MailDejaArchive(SousDossier(chemin, "06", "06_MAILS"), objet, nomMail) Then
+        If MailDejaArchive(SousDossier(chemin, "06", "06_MAILS"), objet, nomMail) Or fso.FileExists(dest & "\" & nomMail) Then
             nbDeja = nbDeja + 1
             Journaliser m, sens, expediteur, CStr(a), chemin, "Mail", nomMail, dest, "DÉJÀ PRÉSENT"
         Else
             If Not SIMULATION Then
                 CreerDossier dest
                 m.SaveAs dest & "\" & nomMail, 9        ' olMSGUnicode
-                AjouterIndex SousDossier(chemin, "06", "06_MAILS"), nomMail, 0
             End If
+            ' mémorisé aussi en simulation : un même nom n'est compté qu'une fois
+            AjouterIndex SousDossier(chemin, "06", "06_MAILS"), nomMail, 0
             nbMailsCopies = nbMailsCopies + 1
             Journaliser m, sens, expediteur, CStr(a), chemin, "Mail", nomMail, dest, IIf(SIMULATION, "À ENREGISTRER", "ENREGISTRÉ")
         End If
@@ -347,18 +371,33 @@ Private Sub TraiterMail(ByVal m As Object, ByVal sens As String)
                         If DossierAffaire(CStr(nPJ(1))) <> "" Then cheminPJ = DossierAffaire(CStr(nPJ(1))): affPJ = CStr(nPJ(1))
                     End If
                 End If
+                ' photo d'un mail qui cite plusieurs affaires, sans affaire dans son nom : on ne sait pas où la ranger
+                If affaires.Count > 1 And nPJ.Count = 0 And EstPhoto(nomPJ) And Not COPIER_PHOTOS_MULTI_AFFAIRES Then
+                    If a = affaires(1) Then                  ' une seule ligne de journal par photo
+                        nbPhotos = nbPhotos + 1
+                        Journaliser m, sens, expediteur, JoindreAffaires(affaires), "", "Photo", nomPJ, "", _
+                                    "PHOTO - mail multi-affaires, à classer à la main"
+                    End If
+                    GoTo PJSuivante
+                End If
                 nbPJ = nbPJ + 1
                 cible = DestinationPJ(cheminPJ, nomPJ, objet, externe, m.ReceivedTime, element)
-                nomPJ = Tronquer(cible, fso.GetBaseName(nomPJ), "." & fso.GetExtensionName(nomPJ))
-                If FichierDejaPresent(RacineCategorie(cheminPJ, cible), nomPJ, att) Then
+                ext = fso.GetExtensionName(nomPJ)
+                If ext <> "" Then ext = "." & ext
+                nomPJ = Tronquer(cible, fso.GetBaseName(nomPJ), ext)
+                If FichierDejaPresent(RacineCategorie(cheminPJ, cible), nomPJ, att) Or fso.FileExists(cible & "\" & nomPJ) Then
                     nbDeja = nbDeja + 1
                     Journaliser m, sens, expediteur, affPJ, cheminPJ, element, nomPJ, cible, "DÉJÀ PRÉSENT"
                 Else
                     If Not SIMULATION Then
                         CreerDossier cible
                         att.SaveAsFile cible & "\" & nomPJ
-                        AjouterIndex RacineCategorie(cheminPJ, cible), nomPJ, FileLen(cible & "\" & nomPJ)
+                        taille = FileLen(cible & "\" & nomPJ)
+                    Else
+                        taille = TailleExacte(att, nomPJ)
                     End If
+                    ' mémorisé aussi en simulation : un même fichier n'est compté qu'une fois
+                    AjouterIndex RacineCategorie(cheminPJ, cible), nomPJ, taille
                     nbPJCopiees = nbPJCopiees + 1
                     Journaliser m, sens, expediteur, affPJ, cheminPJ, element, nomPJ, cible, IIf(SIMULATION, "À COPIER", "COPIÉ")
                 End If
@@ -435,7 +474,7 @@ Private Function DestinationPJ(ByVal chemin As String, ByVal nomPJ As String, By
 End Function
 
 Private Function ContientMotCle(ByVal u As String) As Boolean
-    ContientMotCle = MotPresent(u, "PPSPS|PIC|DIUO|CISSCT|PGC|IC|ICMOD|VIC|INSPECTION|RJ|VI|VI[0-9]+|REGISTRE|VISITE|CR[0-9]*|COMPTE RENDU|DCE|APD|APS|AVP|LIVRET|AVIS")
+    ContientMotCle = MotPresent(u, "PPSPS|PIC|PLAN D INSTALLATION DE CHANTIER|DIUO|CISSCT|PGC|IC|ICMOD|VIC|ICP|INSPECTION|RJ|VI|VI[0-9]+|REGISTRE|VISITE|OUVERTURE|CSPS|CR SPS|CR[0-9]*|COMPTE RENDU|COMPTERENDU|PV DE REUNION|DCE|APD|APS|AVP|LIVRET|AVIS")
 End Function
 
 Private Function MotPresent(ByVal texte As String, ByVal mots As String) As Boolean
@@ -553,13 +592,20 @@ Private Function FichierDejaPresent(ByVal dossier As String, ByVal nom As String
     cle = CleFichier(nom)
     If Not dict.Exists("#" & cle) Then Exit Function
     ' nom proche trouvé : on compare la taille exacte du fichier
+    taille = TailleExacte(att, nom)
+    If taille > 0 Then FichierDejaPresent = dict.Exists("#" & cle & "|" & taille)
+End Function
+
+' Taille exacte d'une pièce jointe (att.Size inclut l'enveloppe MAPI) : copie temporaire dans %TEMP% du poste,
+' supprimée aussitôt. Rien n'est écrit sur le serveur.
+Private Function TailleExacte(ByVal att As Object, ByVal nom As String) As Long
+    Dim tmp As String
     On Error Resume Next
     tmp = Environ("TEMP") & "\archsps_" & Format(Now, "hhnnss") & "_" & nom
     att.SaveAsFile tmp
-    taille = FileLen(tmp)
+    TailleExacte = FileLen(tmp)
     Kill tmp
     On Error GoTo 0
-    If taille > 0 Then FichierDejaPresent = dict.Exists("#" & cle & "|" & taille)
 End Function
 
 ' Clé de comparaison : sans date en tête, sans « (1) », lettres et chiffres uniquement
@@ -578,11 +624,12 @@ Private Function CleFichier(ByVal nom As String) As String
     CleFichier = s & "." & ext
 End Function
 
-' Un mail est considéré comme déjà archivé si un .msg de même nom existe déjà dans 06_MAILS
+' Un mail est considéré comme déjà archivé si un .msg ou un .eml (script pst_archive.py) de même nom existe déjà dans 06_MAILS
 Private Function MailDejaArchive(ByVal dossier06 As String, ByVal objet As String, ByVal nomMail As String) As Boolean
-    Dim dict As Object
+    Dim dict As Object, base As String
     Set dict = IndexDossier(dossier06)
-    MailDejaArchive = dict.Exists(LCase(nomMail))
+    base = Left(nomMail, Len(nomMail) - 4)       ' sans « .msg »
+    MailDejaArchive = dict.Exists(LCase(base & ".msg")) Or dict.Exists(LCase(base & ".eml"))
 End Function
 
 '==============================================================================
@@ -602,16 +649,44 @@ Private Function ExtraireAffaires(ByVal texte As String, Optional ByVal premiere
     Set ExtraireAffaires = res
 End Function
 
+' Recherche en mots entiers : « EPHE » ne se déclenche pas sur « STEPHEN »
 Private Function AffaireParCorrespondance(ByVal texte As String) As Collection
-    Dim res As New Collection, paire As Variant, p As Long, t As String
-    t = " " & Normaliser(texte) & " "
+    Dim res As New Collection, paire As Variant, p As Long, t As String, k As String
+    t = " " & MotsSeuls(texte) & " "
     For Each paire In Split(CORRESPONDANCES, ";")
         p = InStr(paire, "=")
         If p > 1 Then
-            If InStr(t, Normaliser(Trim(Left(paire, p - 1)))) > 0 Then res.Add Trim(Mid(paire, p + 1)): Exit For
+            k = MotsSeuls(Left(paire, p - 1))
+            If k <> "" Then
+                If InStr(t, " " & k & " ") > 0 Then res.Add Trim(Mid(paire, p + 1)): Exit For
+            End If
         End If
     Next
     Set AffaireParCorrespondance = res
+End Function
+
+' Texte normalisé réduit à ses mots (lettres et chiffres) séparés par une espace
+Private Function MotsSeuls(ByVal s As String) As String
+    Dim rx As Object
+    Set rx = CreateObject("VBScript.RegExp")
+    rx.Global = True
+    rx.Pattern = "[^A-Z0-9]+"
+    MotsSeuls = Trim(rx.Replace(Normaliser(s), " "))
+End Function
+
+Private Function JoindreAffaires(ByVal c As Collection) As String
+    Dim x As Variant
+    For Each x In c
+        If JoindreAffaires <> "" Then JoindreAffaires = JoindreAffaires & " / "
+        JoindreAffaires = JoindreAffaires & CStr(x)
+    Next
+End Function
+
+Private Function EstPhoto(ByVal nom As String) As Boolean
+    Select Case LCase(fso.GetExtensionName(nom))
+        Case "heic", "heif", "jpg", "jpeg", "png"
+            EstPhoto = True
+    End Select
 End Function
 
 Private Function Contient(ByVal c As Collection, ByVal v As String) As Boolean
@@ -648,9 +723,16 @@ Private Function PJIgnoree(ByVal att As Object) As Boolean
     If cache Then PJIgnoree = True: Exit Function                       ' pièce jointe masquée (image intégrée)
     nom = LCase(att.FileName)
     ext = LCase(fso.GetExtensionName(nom))
+    If nom = "" Then PJIgnoree = True: Exit Function
     If ext = "ics" Or ext = "vcf" Or ext = "p7s" Or nom Like "att0*" Then PJIgnoree = True: Exit Function
     If ext = "png" Or ext = "jpg" Or ext = "jpeg" Or ext = "gif" Or ext = "bmp" Or ext = "emz" Or ext = "wmz" Then
-        If nom Like "image0*" Or nom Like "outlook*" Or att.Size < 60000 Then PJIgnoree = True
+        If nom Like "image*" Or nom Like "outlook*" Or nom Like "logo*" Or att.Size < 60000 Then PJIgnoree = True: Exit Function
+        ' image intégrée au corps du mail (signature, logo) : Content-ID ou indicateur « référencée en HTML »
+        Dim cid As String, flags As Long
+        cid = "": flags = 0
+        cid = att.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x3712001F")
+        flags = att.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x37140003")
+        If cid <> "" Or (flags And 4) = 4 Then PJIgnoree = True
     End If
 End Function
 
@@ -671,14 +753,17 @@ Private Function Tronquer(ByVal dossier As String, ByVal base As String, ByVal e
     maxi = MAX_CHEMIN - Len(dossier) - 1 - Len(ext)
     If maxi < 20 Then maxi = 20
     If Len(base) > maxi Then base = Trim(Left(base, maxi))
+    ' Windows retire les points et espaces en fin de nom : on les retire aussi pour que le nom testé soit le nom écrit
+    Do While Len(base) > 0 And (Right(base, 1) = "." Or Right(base, 1) = " "): base = Left(base, Len(base) - 1): Loop
+    If base = "" Then base = "sans nom"
     Tronquer = base & ext
 End Function
 
 Private Function Normaliser(ByVal s As String) As String
     Dim a As Variant, b As Variant, i As Long
     s = UCase(s)
-    a = Array("É", "È", "Ê", "Ë", "À", "Â", "Î", "Ï", "Ô", "Ù", "Û", "Ü", "Ç", "_", ".", "-", "'")
-    b = Array("E", "E", "E", "E", "A", "A", "I", "I", "O", "U", "U", "U", "C", " ", " ", " ", " ")
+    a = Array("É", "È", "Ê", "Ë", "À", "Â", "Î", "Ï", "Ô", "Ù", "Û", "Ü", "Ç", "Œ", "œ", "Æ", "æ", "_", ".", "-", "'", "’")
+    b = Array("E", "E", "E", "E", "A", "A", "I", "I", "O", "U", "U", "U", "C", "OE", "OE", "AE", "AE", " ", " ", " ", " ", " ")
     For i = 0 To UBound(a)
         s = Replace(s, a(i), b(i))
     Next
@@ -709,27 +794,42 @@ Private Function Csv(ByVal s As String) As String
 End Function
 
 Private Function EcrireJournal() As String
-    Dim chemin As String, stm As Object, ligne As Variant
-    On Error Resume Next
-    CreerDossier JOURNAL_DOSSIER
-    chemin = JOURNAL_DOSSIER & "\Journal archivage " & Format(Now, "yyyy-mm-dd hhnn") & _
-             IIf(SIMULATION, " SIMULATION", "") & ".csv"
-    Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 2
-    stm.Charset = "utf-8"
-    stm.Open
-    For Each ligne In journal
-        stm.WriteText CStr(ligne) & vbCrLf
-    Next
-    stm.SaveToFile chemin, 2
-    stm.Close
-    If Err.Number <> 0 Then
+    Dim nom As String
+    nom = "Journal archivage " & Format(Now, "yyyy-mm-dd hhnnss") & " " & NettoyerNom(Environ("USERNAME")) & _
+          IIf(SIMULATION, " SIMULATION", "") & ".csv"
+    EcrireJournal = EcrireTexte(nom, journal)
+End Function
+
+' Écrit les lignes en UTF-8 (avec BOM) dans JOURNAL_DOSSIER, sans jamais écraser un fichier existant ;
+' en cas d'échec, sur le Bureau. Renvoie le chemin écrit.
+Private Function EcrireTexte(ByVal nom As String, ByVal lignes As Collection) As String
+    Dim dossier As Variant, chemin As String, stm As Object, ligne As Variant
+    For Each dossier In Array(JOURNAL_DOSSIER, Environ("USERPROFILE") & "\Desktop")
+        On Error Resume Next
         Err.Clear
-        chemin = Environ("USERPROFILE") & "\Desktop\Journal archivage SPS.csv"
-        stm.Open: For Each ligne In journal: stm.WriteText CStr(ligne) & vbCrLf: Next
-        stm.SaveToFile chemin, 2: stm.Close
-    End If
-    EcrireJournal = chemin
+        CreerDossier CStr(dossier)
+        chemin = NomLibre(CStr(dossier) & "\" & nom)
+        Set stm = CreateObject("ADODB.Stream")
+        stm.Type = 2: stm.Charset = "utf-8": stm.Open
+        For Each ligne In lignes: stm.WriteText CStr(ligne) & vbCrLf: Next
+        stm.SaveToFile chemin, 1                    ' adSaveCreateNotExist : échoue plutôt que d'écraser
+        stm.Close
+        If Err.Number = 0 Then EcrireTexte = chemin: Exit Function
+        On Error GoTo 0
+    Next
+    EcrireTexte = "(journal non écrit)"
+End Function
+
+' « chemin » s'il n'existe pas, sinon « chemin (2) », « chemin (3) »...
+Private Function NomLibre(ByVal chemin As String) As String
+    Dim base As String, ext As String, i As Long
+    NomLibre = chemin
+    If Not fso.FileExists(chemin) Then Exit Function
+    base = fso.GetParentFolderName(chemin) & "\" & fso.GetBaseName(chemin)
+    ext = fso.GetExtensionName(chemin)
+    i = 2
+    Do While fso.FileExists(base & " (" & i & ")." & ext): i = i + 1: Loop
+    NomLibre = base & " (" & i & ")." & ext
 End Function
 
 '==============================================================================
@@ -743,6 +843,8 @@ Public Sub DiagnosticDossiers()
     dDebut = DateSerial(CInt(Left(DATE_DEBUT, 4)), CInt(Mid(DATE_DEBUT, 6, 2)), CInt(Right(DATE_DEBUT, 2)))
     dFin = DateSerial(CInt(Left(DATE_FIN, 4)), CInt(Mid(DATE_FIN, 6, 2)), CInt(Right(DATE_FIN, 2)))
     Set lignes = New Collection
+    lignes.Add "Diagnostic version " & VERSION & " - utilisateur " & Environ("USERNAME") & " - poste " & Environ("COMPUTERNAME") & _
+               " - " & Format(Now, "dd/mm/yyyy hh:nn")
     lignes.Add "Boîte retenue par la macro : " & NomBoiteRetenue()
     For Each st In Application.Session.Stores
         lignes.Add ""
@@ -751,12 +853,7 @@ Public Sub DiagnosticDossiers()
         DiagDossier st.GetRootFolder, lignes, 0
         On Error GoTo 0
     Next
-    CreerDossier JOURNAL_DOSSIER
-    chemin = JOURNAL_DOSSIER & "\Diagnostic dossiers.txt"
-    Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 2: stm.Charset = "utf-8": stm.Open
-    For Each l In lignes: stm.WriteText CStr(l) & vbCrLf: Next
-    stm.SaveToFile chemin, 2: stm.Close
+    chemin = EcrireTexte("Diagnostic dossiers " & NettoyerNom(Environ("USERNAME")) & " " & Format(Now, "yyyy-mm-dd hhnnss") & ".txt", lignes)
     MsgBox "Diagnostic écrit dans : " & chemin, vbInformation, "Archivage SPS"
 End Sub
 

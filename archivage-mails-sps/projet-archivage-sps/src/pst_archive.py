@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Archivage SPS depuis un export .pst (lecture seule du .pst, la boîte mail n'est pas touchée).
-Mêmes règles que la macro ArchivageSPS.bas v1.7.
+Mêmes règles que la macro ArchivageSPS.bas v1.9.
 Usage :
   pst_archive.py tree  PST DEBUT FIN
   pst_archive.py run   PST DEBUT FIN [--apply]      (reprend là où il s'était arrêté, ~150 s par appel)
@@ -20,13 +20,14 @@ WORK = os.path.join(HOME, "pstrun")
 BOITE = "secretariat.sps@degouy.fr"
 MAX_CHEMIN = 250
 BUDGET = 100
+COPIER_PHOTOS_MULTI_AFFAIRES = False   # False = photos d'un mail multi-affaires signalées, non copiées
 
 CORRESPONDANCES = ("54 RUE DE ROMAINVILLE=7.2025.041;STEP CHAUMES=7.2023.463;PONT D'IVRY=7.2025.397;"
     "CHUGPN=7.2022.198;BONDOUFLE=7.2021.055;PONT AMAR=7.2021.455;hbarchitectes.fr=7.2021.455;"
     "BEAUDELAIRE=7.2026.019;BAUDELAIRE=7.2026.019;BILLETTES=7.2025.042;COLLEGE HONORE DE BALZAC=7.2023.002;"
     "FOYER PARIS DUMAS=7.2025.345;BLOMET=7.2019.347;atelierboteko=7.2019.347;GLACIERE=7.2022.500;"
     "MERCOEUR=7.2023.218;wao.paris=7.2023.218;STADE NAUTIQUE=7.2026.272;BD NEY=7.2021.105;"
-    "SAINT-BERNARD-DE-LA-CHAPELLE=7.2023.282;EPHE=7.2024.324;RESTO DU COEUR=7.2025.386;"
+    "SAINT-BERNARD-DE-LA-CHAPELLE=7.2023.282;EPHE=7.2024.324;RESTO DU COEUR=7.2025.386;RESTOS DU COEUR=7.2025.386;"
     "LEG SARTROUVILLE=7.2020.533;STATION FOCH=7.2024.384;CLICHY-SOUS-BOIS=7.2022.448;"
     "HOTEL DIEU=7.2018.194;LOURCINE=7.2023.437;RUE BERTHIER=7.2020.512")
 
@@ -49,6 +50,7 @@ def paris(dt):
 def norm(s):
     s = (s or "").upper()
     s = "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+    s = s.replace("Œ", "OE").replace("Æ", "AE")
     for c in "_.-'’":
         s = s.replace(c, " ")
     return s
@@ -68,12 +70,17 @@ def affaires(texte, premiere=False):
                 break
     return res
 
+def mots_seuls(s):
+    return re.sub(r"[^A-Z0-9]+", " ", norm(s)).strip()
+
 def par_correspondance(texte):
-    t = " " + norm(texte) + " "
+    """Recherche en mots entiers : « EPHE » ne se déclenche pas sur « STEPHEN »."""
+    t = " " + mots_seuls(texte) + " "
     for paire in CORRESPONDANCES.split(";"):
         if "=" in paire:
             k, v = paire.split("=", 1)
-            if norm(k.strip()) in t:
+            k = mots_seuls(k)
+            if k and " " + k + " " in t:
                 return [v.strip()]
     return []
 
@@ -88,6 +95,8 @@ def tronquer(dossier, base, ext):
     maxi = max(maxi, 20)
     if len(base) > maxi:
         base = base[:maxi].strip()
+    # Windows retire les points et espaces en fin de nom : le nom testé doit être le nom écrit
+    base = base.rstrip(". ") or "sans nom"
     return base + ext
 
 def win(p):
@@ -191,11 +200,11 @@ class Serveur:
         return False
 
 def racine_categorie(chemin, cible):
-    reste = cible[len(chemin) + 1:]
-    return os.path.join(chemin, reste.split("/")[0])
+    reste = os.path.relpath(cible, chemin)
+    return os.path.join(chemin, reste.split(os.sep)[0])
 
 def contient_mot_cle(u):
-    return mot(u, "PPSPS|PIC|DIUO|CISSCT|PGC|IC|ICMOD|VIC|INSPECTION|RJ|VI|VI[0-9]+|REGISTRE|VISITE|CR[0-9]*|COMPTE RENDU|DCE|APD|APS|AVP|LIVRET|AVIS")
+    return mot(u, "PPSPS|PIC|PLAN D INSTALLATION DE CHANTIER|DIUO|CISSCT|PGC|IC|ICMOD|VIC|ICP|INSPECTION|RJ|VI|VI[0-9]+|REGISTRE|VISITE|OUVERTURE|CSPS|CR SPS|CR[0-9]*|COMPTE RENDU|COMPTERENDU|PV DE REUNION|DCE|APD|APS|AVP|LIVRET|AVIS")
 
 def destination(S, chemin, nom, objet, externe, dt):
     u = " " + norm(nom) + " "
@@ -275,13 +284,18 @@ def walk(folder, path, out):
     for i in range(folder.number_of_sub_folders):
         walk(folder.get_sub_folder(i), p, out)
 
+# noms exacts des dossiers système (un dossier d'assistante nommé « Notes chantier » n'est pas exclu)
 EXCL = ("calendrier", "calendar", "contacts", "tâches", "tasks", "notes", "journal", "brouillons", "drafts",
-        "courrier indésirable", "junk", "problèmes de synchronisation", "sync issues", "historique des conversations",
-        "conversation history", "flux rss", "rss", "yammer", "conflits", "défaillances", "suggested contacts", "contacts suggérés")
+        "courrier indésirable", "junk e-mail", "junk email", "historique des conversations", "conversation history",
+        "flux rss", "rss feeds", "rss subscriptions", "yammer root", "suggested contacts", "contacts suggérés")
+# dossiers système dont le nom a un complément (« Problèmes de synchronisation (ce poste uniquement) »...)
+EXCL_DEBUT = ("problèmes de synchronisation", "sync issues", "conflits", "conflicts", "défaillances", "local failures",
+              "server failures", "échecs")
+ENVOYES = ("éléments envoyés", "elements envoyes", "sent items", "sent")
 
 def dossier_mail(path, folder):
     last = path.split("/")[-1].lower()
-    if any(last == x or last.startswith(x) for x in EXCL):
+    if last in EXCL or any(last.startswith(x) for x in EXCL_DEBUT):
         return False
     cc = props(folder).get(0x3613) or ""
     return (cc == "" or cc.startswith("IPF.Note"))
@@ -328,9 +342,15 @@ def ecrire_sans_ecraser(chemin, data):
     if os.path.exists(chemin):
         return False
     os.makedirs(os.path.dirname(chemin), exist_ok=True)
-    with open(chemin, "xb") as f:
-        f.write(data)
+    try:
+        with open(chemin, "xb") as f:
+            f.write(data)
+    except FileExistsError:
+        return False
     return True
+
+def est_photo(nom):
+    return os.path.splitext(nom.lower())[1] in (".heic", ".heif", ".jpg", ".jpeg", ".png")
 
 # ------------------------------------------------------------------ traitement
 def traiter(pst_path, debut, fin, apply):
@@ -360,7 +380,8 @@ def traiter(pst_path, debut, fin, apply):
             J(type="dossier", dossier=path, n=folder.number_of_sub_messages, mail=dossier_mail(path, folder))
         if not dossier_mail(path, folder):
             fi += 1; etat.update(dossier=fi, msg=0); continue
-        envoye = ("envoy" in path.lower() or "sent" in path.lower())
+        # dossier Éléments envoyés ou l'un de ses sous-dossiers (nom exact, pas « Absents » ni « Présentations »)
+        envoye = any(c.lower() in ENVOYES for c in path.split("/"))
         n = folder.number_of_sub_messages
         mi = etat["msg"]
         while mi < n:
@@ -459,6 +480,11 @@ def traiter_mail(S, m, dt, dt_utc, path, envoye, apply, J):
                 if n2[0] in affs: continue
                 c2 = S.dossier_affaire(n2[0])
                 if c2: ch, af = c2, n2[0]
+            if len(affs) > 1 and not n2 and est_photo(nom) and not COPIER_PHOTOS_MULTI_AFFAIRES:
+                if aff == affs[0]:          # une seule ligne de journal par photo
+                    J(**base, affaire=" / ".join(affs), chemin="", element="Photo", fichier=nom, dest="",
+                      statut="PHOTO - mail multi-affaires, à classer à la main")
+                continue
             J(type="pj")
             element, cible = destination(S, ch, nom, objet, externe, dt)
             b, e = os.path.splitext(nom)
@@ -491,10 +517,16 @@ def rapport(debut, fin, apply):
             stats[k] = stats.get(k, 0) + 1
         elif r["type"] == "erreur":
             lignes.append(";;;;;;;;;%s;%s" % (c("ERREUR " + r["info"]), c(r["dossier"])))
+    base, i = nom[:-4], 2
     if os.path.exists(nom):
-        nom = nom[:-4] + time.strftime(" %H%M") + ".csv"
-    with open(nom, "w", encoding="utf-8-sig", newline="") as f:
-        f.write("\r\n".join(lignes) + "\r\n")
+        nom = base + time.strftime(" %H%M") + ".csv"
+    while True:                          # jamais d'écrasement : « (2) », « (3) »... si le nom est pris
+        try:
+            with open(nom, "x", encoding="utf-8-sig", newline="") as f:
+                f.write("\r\n".join(lignes) + "\r\n")
+            break
+        except FileExistsError:
+            nom = "%s%s (%d).csv" % (base, time.strftime(" %H%M"), i); i += 1
     print("Journal :", win(nom))
     print("mails:", sum(1 for r in rows if r["type"] == "mail"), "pj examinées:", sum(1 for r in rows if r["type"] == "pj"))
     for k in sorted(stats): print(k, stats[k])

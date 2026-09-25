@@ -81,8 +81,8 @@ Les compte-rendus de réunion de maîtrise d'œuvre sont classés **systématiqu
 
 ## Code existant (dossier `src/`)
 
-- `ArchivageSPS.bas` : macro Outlook VBA (le dépôt contient la v1.7 ; la v1.8 est sur `U:`), en liaison tardive (late binding), encodée en cp1252 avec des fins de ligne CRLF. Elle fonctionne sur Boîte de réception, Éléments envoyés et Éléments supprimés. Les paramètres sont en tête de fichier (dates, `SIMULATION`, `CORRESPONDANCES`).
-- `pst_archive.py` : même logique appliquée à un export .pst, avec pypff (paquet `libpff-python-ratom`). Il écrit les mails en .eml. Il traite par tranches avec reprise (`~/pstrun`) et propose les commandes `tree`, `run` et `report`.
+- `ArchivageSPS.bas` : macro Outlook VBA v1.9 (corrections de la revue du 25/09/2026, voir `revue-code-2026-09-25.md`). Journal : `Journal archivage AAAA-MM-JJ hhmmss <utilisateur> [SIMULATION].csv` ; diagnostic : `Diagnostic dossiers <utilisateur> AAAA-MM-JJ hhmmss.txt`. Paramètre `COPIER_PHOTOS_MULTI_AFFAIRES` (False par défaut). Stockée en UTF-8 dans git, restituée en cp1252/CRLF, en liaison tardive (late binding), encodée en cp1252 avec des fins de ligne CRLF. Elle fonctionne sur Boîte de réception, Éléments envoyés et Éléments supprimés. Les paramètres sont en tête de fichier (dates, `SIMULATION`, `CORRESPONDANCES`).
+- `pst_archive.py` : mêmes règles que la macro v1.9, appliquées à un export .pst (le serveur est lu dans `~/mnt` : script prévu pour Linux), avec pypff (paquet `libpff-python-ratom`). Il écrit les mails en .eml. Il traite par tranches avec reprise (`~/pstrun`) et propose les commandes `tree`, `run` et `report`.
 
 ## Problèmes connus
 
