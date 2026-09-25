@@ -81,14 +81,16 @@ Les compte-rendus de réunion de maîtrise d'œuvre sont classés **systématiqu
 
 ## Code existant (dossier `src/`)
 
-- `ArchivageSPS.bas` : macro Outlook VBA v1.9 (corrections de la revue du 25/09/2026, voir `revue-code-2026-09-25.md`). Journal : `Journal archivage AAAA-MM-JJ hhmmss <utilisateur> [SIMULATION].csv` ; diagnostic : `Diagnostic dossiers <utilisateur> AAAA-MM-JJ hhmmss.txt`. Paramètre `COPIER_PHOTOS_MULTI_AFFAIRES` (False par défaut). Stockée en UTF-8 dans git, restituée en cp1252/CRLF, en liaison tardive (late binding), encodée en cp1252 avec des fins de ligne CRLF. Elle fonctionne sur Boîte de réception, Éléments envoyés et Éléments supprimés. Les paramètres sont en tête de fichier (dates, `SIMULATION`, `CORRESPONDANCES`).
+- `ArchivageSPS.bas` : macro Outlook VBA v1.10 (v1.9 : corrections de la revue du 25/09/2026, voir `revue-code-2026-09-25.md` ; v1.10 : filtre de date en 24 h, la matinée du premier jour était ignorée, voir `analyse-journaux-2026-09-25.md`). Journal : `Journal archivage AAAA-MM-JJ hhmmss <utilisateur> [SIMULATION].csv` ; diagnostic : `Diagnostic dossiers <utilisateur> AAAA-MM-JJ hhmmss.txt`. Paramètre `COPIER_PHOTOS_MULTI_AFFAIRES` (False par défaut). Stockée en UTF-8 dans git, restituée en cp1252/CRLF, en liaison tardive (late binding), encodée en cp1252 avec des fins de ligne CRLF. Elle fonctionne sur Boîte de réception, Éléments envoyés et Éléments supprimés. Les paramètres sont en tête de fichier (dates, `SIMULATION`, `CORRESPONDANCES`).
 - `pst_archive.py` : mêmes règles que la macro v1.9, appliquées à un export .pst (le serveur est lu dans `~/mnt` : script prévu pour Linux), avec pypff (paquet `libpff-python-ratom`). Il écrit les mails en .eml. Il traite par tranches avec reprise (`~/pstrun`) et propose les commandes `tree`, `run` et `report`.
 
 ## Problèmes connus
 
 - **Revue du code du 25/09/2026** : voir `revue-code-2026-09-25.md` (écrasements possibles, simulation de la macro qui surestime les copies, écarts entre la macro et le script, script non portable sous Windows).
 
-- **Sous-dossiers invisibles.** Sur le poste d'Olivier, Outlook ne voit pas les sous-dossiers de la Boîte de réception (Heures, Aurore, Audrey, Sophie\CORDO\…, Aurore\Classement\…), ni avec la macro ni à l'export .pst. Ils sont probablement propres aux postes des assistantes. Les tests se font sur ces postes.
+- **Sous-dossiers de la Boîte de réception** (Heures, Aurore, Audrey, Sophie\CORDO\…, Aurore\Classement\…) : **résolu le 25/09/2026**. La macro v1.8 et le nouvel export .pst les voient depuis le poste d'Olivier (91 dossiers).
+- **Mails en double dans la boîte** : beaucoup de mails sont à la fois dans un sous-dossier et dans Éléments supprimés. Le nom de fichier (date + objet) évite de les archiver deux fois.
+- **Un seul outil par période** : Outlook et l'export .pst peuvent horodater un même mail à une minute d'écart ; le nom de fichier diffère alors entre .msg et .eml.
 - **Export .pst sur le lecteur réseau U:** : erreurs « inconnues » et fichier verrouillé tant qu'Outlook est ouvert. Il faut exporter en local, puis copier.
 - **Réimport du .bas** : réimporter le fichier crée « ArchivageSPS1 ». Il faut d'abord supprimer les anciens modules.
 - **Photos de téléphone (.heic, .jpg)** jointes à des mails qui citent plusieurs affaires : elles seraient copiées plusieurs fois. À traiter ; proposition : signaler dans le journal plutôt que copier.

@@ -1,7 +1,12 @@
 Attribute VB_Name = "ArchivageSPS"
 '==============================================================================
 '  ARCHIVAGE DES MAILS ET PIECES JOINTES DE LA BOITE secretariat.sps
-'  Groupe DEGOUY - Pôle SPS - version 1.9 du 25/09/2026
+'  Groupe DEGOUY - Pôle SPS - version 1.10 du 25/09/2026
+'
+'  Nouveauté de la version 1.10 :
+'   - CORRECTION : les mails du premier jour de la période reçus avant midi
+'     étaient ignorés (filtre de date en « h:nn AMPM » mal lu sur un Windows
+'     français). Filtre désormais en 24 h, avec contrôle exact mail par mail.
 '
 '  Nouveautés de la version 1.9 :
 '   - aucun fichier n'est jamais écrasé : existence vérifiée juste avant
@@ -70,7 +75,7 @@ Private Const INCLURE_SOUS_DOSSIERS As Boolean = True
 Private Const TRAITER_ENVOYES As Boolean = True
 Private Const JOURNAL_DOSSIER As String = "U:\S.P.S. 26\_ARCHIVAGE MAILS"
 Private Const MAX_CHEMIN As Long = 250
-Private Const VERSION As String = "1.9"
+Private Const VERSION As String = "1.10"
 ' Photos jointes à un mail qui cite plusieurs affaires : False = signalées dans le journal, non copiées
 Private Const COPIER_PHOTOS_MULTI_AFFAIRES As Boolean = False
 ' Mots-clés (objet ou adresse de l'expéditeur) -> n° d'affaire, pour les mails sans n° d'affaire.
@@ -231,7 +236,7 @@ Private Sub CollecteDiag(ByVal f As Object, ByVal liste As Collection)
     Dim sf As Object, n As Long, total As Long, filtre As String
     On Error Resume Next
     total = f.Items.Count
-    filtre = "[ReceivedTime] >= '" & Format(dDebut, "ddddd h:nn AMPM") & "' AND [ReceivedTime] < '" & Format(dFin, "ddddd h:nn AMPM") & "'"
+    filtre = FiltrePeriode(dDebut, dFin)
     n = f.Items.Restrict(filtre).Count
     liste.Add f
     journal.Add ";;;;;;;;;DOSSIER VU (" & total & " éléments, " & n & " sur la période);" & Csv(f.FolderPath)
@@ -276,17 +281,25 @@ Private Sub CollecterDossiers(ByVal f As Object, ByVal exclus As Object, ByVal i
     Next
 End Sub
 
+' Filtre Outlook sur la date de réception, en heure 24 h.
+' (v1.9 et avant : « h:nn AMPM » ; sur un Windows français, sans indicateur AM/PM, minuit s'écrivait « 12:00 »
+'  et Outlook le lisait comme midi : tous les mails du premier jour avant 12 h étaient ignorés.)
+Private Function FiltrePeriode(ByVal d1 As Date, ByVal d2 As Date) As String
+    FiltrePeriode = "[ReceivedTime] >= '" & Format(d1, "ddddd hh:nn") & "' AND [ReceivedTime] < '" & Format(d2, "ddddd hh:nn") & "'"
+End Function
+
 Private Sub TraiterDossier(ByVal dossier As Object, ByVal sens As String, Optional ByVal recursif As Boolean = True)
     Dim elements As Object, it As Object, i As Long, filtre As String, sf As Object
 
-    filtre = "[ReceivedTime] >= '" & Format(dDebut, "ddddd h:nn AMPM") & "' AND [ReceivedTime] < '" & Format(dFin, "ddddd h:nn AMPM") & "'"
+    ' fenêtre élargie d'un jour de chaque côté : la date exacte est contrôlée plus bas, mail par mail
+    filtre = FiltrePeriode(dDebut - 1, dFin + 1)
     On Error Resume Next
     Set elements = dossier.Items.Restrict(filtre)
     If Err.Number <> 0 Then Err.Clear: Set elements = dossier.Items
     On Error GoTo 0
 
     nbDossiers = nbDossiers + 1
-    journal.Add ";;;;;;;;;DOSSIER PARCOURU (" & elements.Count & " élément(s) sur la période);" & Csv(dossier.FolderPath)
+    journal.Add ";;;;;;;;;DOSSIER PARCOURU (" & elements.Count & " élément(s) entre la veille et le lendemain de la période);" & Csv(dossier.FolderPath)
     Debug.Print "Dossier " & dossier.FolderPath & " : " & elements.Count & " élément(s)"
     For i = 1 To elements.Count
         Set it = elements(i)
@@ -868,7 +881,7 @@ Private Sub DiagDossier(ByVal f As Object, ByVal lignes As Collection, ByVal niv
     On Error Resume Next
     total = -1: n = -1
     total = f.Items.Count
-    filtre = "[ReceivedTime] >= '" & Format(dDebut, "ddddd h:nn AMPM") & "' AND [ReceivedTime] < '" & Format(dFin, "ddddd h:nn AMPM") & "'"
+    filtre = FiltrePeriode(dDebut, dFin)
     n = f.Items.Restrict(filtre).Count
     lignes.Add String(niveau * 2, " ") & f.Name & "  | type " & f.DefaultItemType & " | " & total & " éléments | " & n & " sur la période"
     For Each sf In f.Folders

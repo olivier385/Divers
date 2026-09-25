@@ -14,6 +14,7 @@ Relecture de `src/ArchivageSPS.bas` et `src/pst_archive.py` au regard des règle
 | 3 — mail joint (.msg dans le mail) | **non aligné** : la macro l'enregistre, le script le signale |
 | 4 — mots-clés, correspondances en mots entiers, Œ, « RESTOS » | corrigé |
 | 5 — portabilité Windows du script | partiel : `racine_categorie` corrigé ; la racine du serveur reste `~/mnt` |
+| **Nouveau (v1.10)** — filtre de date « h:nn AMPM » : mails du premier jour avant midi ignorés | corrigé : filtre en 24 h, plage élargie d'un jour, contrôle exact mail par mail |
 | Photos .heic d'un mail multi-affaires | nouveau paramètre `COPIER_PHOTOS_MULTI_AFFAIRES = False` : photo signalée une fois dans le journal, non copiée |
 
 Le détail initial de la revue suit.
