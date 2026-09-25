@@ -1,0 +1,4 @@
+# Macro VBA : l'éditeur VBA d'Outlook attend du cp1252 avec des fins de ligne CRLF.
+# Git la stocke en UTF-8 et la restitue en cp1252/CRLF dans la copie de travail.
+*.bas text working-tree-encoding=cp1252 eol=crlf
+*.py text eol=lf

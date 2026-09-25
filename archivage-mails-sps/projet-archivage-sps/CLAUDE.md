@@ -81,10 +81,12 @@ Les compte-rendus de réunion de maîtrise d'œuvre sont classés **systématiqu
 
 ## Code existant (dossier `src/`)
 
-- `ArchivageSPS.bas` : macro Outlook VBA v1.8, en liaison tardive (late binding), encodée en cp1252 avec des fins de ligne CRLF. Elle fonctionne sur Boîte de réception, Éléments envoyés et Éléments supprimés. Les paramètres sont en tête de fichier (dates, `SIMULATION`, `CORRESPONDANCES`).
+- `ArchivageSPS.bas` : macro Outlook VBA (le dépôt contient la v1.7 ; la v1.8 est sur `U:`), en liaison tardive (late binding), encodée en cp1252 avec des fins de ligne CRLF. Elle fonctionne sur Boîte de réception, Éléments envoyés et Éléments supprimés. Les paramètres sont en tête de fichier (dates, `SIMULATION`, `CORRESPONDANCES`).
 - `pst_archive.py` : même logique appliquée à un export .pst, avec pypff (paquet `libpff-python-ratom`). Il écrit les mails en .eml. Il traite par tranches avec reprise (`~/pstrun`) et propose les commandes `tree`, `run` et `report`.
 
 ## Problèmes connus
+
+- **Revue du code du 25/09/2026** : voir `revue-code-2026-09-25.md` (écrasements possibles, simulation de la macro qui surestime les copies, écarts entre la macro et le script, script non portable sous Windows).
 
 - **Sous-dossiers invisibles.** Sur le poste d'Olivier, Outlook ne voit pas les sous-dossiers de la Boîte de réception (Heures, Aurore, Audrey, Sophie\CORDO\…, Aurore\Classement\…), ni avec la macro ni à l'export .pst. Ils sont probablement propres aux postes des assistantes. Les tests se font sur ces postes.
 - **Export .pst sur le lecteur réseau U:** : erreurs « inconnues » et fichier verrouillé tant qu'Outlook est ouvert. Il faut exporter en local, puis copier.
