@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-This repository (`olivier385/Divers` — "Divers" is French for "Miscellaneous") is currently empty: it contains no source code, build configuration, tests, or documentation yet. It appears intended as a catch-all repository for miscellaneous files and projects.
+This repository (`olivier385/Divers` — "Divers" is French for "Miscellaneous") is a catch-all repository for miscellaneous files and projects. It contains no source code, build configuration or tests yet.
+
+## Structure
+
+- `archivage-mails-sps/` — suivi du projet d'archivage des mails de la boîte secretariat.sps (macro Outlook `ArchivageSPS.bas`, script `pst_archive.py`, hors dépôt). Notes d'avancement datées (`point-AAAA-MM-JJ.md`), en français.
 
 ## Guidance
 
