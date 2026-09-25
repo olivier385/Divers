@@ -83,3 +83,17 @@ si l'on utilisait successivement le script puis la macro sur la même période. 
    285 mails à enregistrer, 60 pièces jointes à copier et 10 photos signalées.
 2. Compléter `CORRESPONDANCES` avec les n° d'affaire listés au point 4.
 3. Valider le journal, puis passer `SIMULATION = False` pour la copie réelle de la semaine.
+
+## Résultat de la simulation v1.10 (poste o.degouy, 25/09/2026 à 17 h 37)
+
+| | Attendu | Obtenu |
+|---|---:|---:|
+| Mails à enregistrer | ~285 | **290** |
+| Pièces jointes à copier | ~60 | **66** |
+| Photos de mails multi-affaires | 10 | **10** |
+| Mails sans n° d'affaire | 20 | 20 |
+| Erreurs | 0 | 0 |
+
+Autres chiffres : 67 dossiers parcourus, 403 mails traités, 380 pièces jointes examinées, 416 fichiers déjà présents, durée 1,3 min.
+Journal : `Journal archivage 2026-09-25 173745 o.degouy SIMULATION.csv`.
+Les résultats sont conformes à ce qui était attendu. Reste à relire le journal ligne par ligne avant la copie réelle.
