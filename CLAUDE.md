@@ -8,7 +8,7 @@ This repository (`olivier385/Divers` — "Divers" is French for "Miscellaneous")
 
 ## Structure
 
-- `archivage-mails-sps/` — suivi du projet d'archivage des mails de la boîte secretariat.sps (macro Outlook `ArchivageSPS.bas`, script `pst_archive.py`, hors dépôt). Notes d'avancement datées (`point-AAAA-MM-JJ.md`) et guide de démarrage d'une session Claude Code sur un poste Windows (`guide-session-claude-code.md`), en français.
+- `archivage-mails-sps/` — suivi du projet d'archivage des mails de la boîte secretariat.sps (macro Outlook `ArchivageSPS.bas`, script `pst_archive.py`, hors dépôt). Notes d'avancement datées (`point-AAAA-MM-JJ.md`), `projet-archivage-sps/CLAUDE.md` (contexte à copier à la racine du projet local `C:\dev\projet-archivage-sps`) et guide de démarrage d'une session Claude Code sur un poste Windows (`guide-session-claude-code.md`), en français.
 
 ## Guidance
 
