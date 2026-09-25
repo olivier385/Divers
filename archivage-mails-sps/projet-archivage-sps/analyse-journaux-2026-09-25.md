@@ -97,3 +97,28 @@ si l'on utilisait successivement le script puis la macro sur la même période. 
 Autres chiffres : 67 dossiers parcourus, 403 mails traités, 380 pièces jointes examinées, 416 fichiers déjà présents, durée 1,3 min.
 Journal : `Journal archivage 2026-09-25 173745 o.degouy SIMULATION.csv`.
 Les résultats sont conformes à ce qui était attendu. Reste à relire le journal ligne par ligne avant la copie réelle.
+
+## Relecture du journal v1.10 (802 lignes)
+
+**Contrôles automatiques : tous conformes.**
+- Aucun mail ni aucune pièce jointe n'est prévu deux fois (même nom, même destination).
+- Les mails du 21/09 avant midi sont bien présents (13 lignes).
+- Les 10 photos .heic du mail « Oudiné » sont signalées une seule fois chacune et ne sont pas copiées.
+- Aucun dossier d'affaire introuvable, aucune erreur.
+- Volume : 290 mails dans 146 affaires ; 66 pièces jointes dans 46 affaires.
+
+**Destinations des 66 pièces jointes** : RJ 28 (dont 8 dans `RJ\2026`) · 05_DIVERS 11 · 02_PPSPS 8 · 03_CR CHANTIER 8 · IC 4 · 01_RJ et IC (sans sous-dossier) 2 · 09_PGC 2 · CISSCT, DIUO, APS/AVP 1 chacun.
+Les 7 CR de maîtrise d'œuvre externes (Blomet CR37, Seqens Évry CR19, Glacière CR05, Mercœur CR34, STEP Chaumes CR51 et son annexe, Foyer Paris Dumas CR05, Villeneuve CR07) vont bien en `03`.
+
+**Points à vérifier par Olivier avant la copie réelle :**
+
+| Affaire | Fichier | Destination prévue | Remarque |
+|---|---|---|---|
+| 7.2023.137 | `2I160-Crèche Auguste CAIN_20260921_CR00 Lancement.pdf` | `01_RJ et IC` | Il s'agit probablement du CR de lancement de la maîtrise d'œuvre, donc à ranger en `03_CR CHANTIER`. Il a été transféré en interne (f.samis) sans « TR: » dans l'objet : la règle « mail externe » ne s'applique donc pas. |
+| 7.2023.002 | `IC - PSB ECHAFAUDAGES - 7.2023.002 - Construction collège Balzac.pdf` | Balzac `01_RJ et IC\IC` | Joint à un mail « 7.2024.279 Bondy potager ». Le nom du fichier cite Balzac : la règle le range dans Balzac. À confirmer. |
+| 7.2026.153 | `20260924 - Etat navette.pdf` | `09_PGC` | Classé d'après l'objet du mail (« rediffusion du PGC »). Un état navette n'est peut-être pas un PGC. |
+| 7.2022.198 | 8 pièces DC4 modificatifs (EPAURIF / Eiffage) | `05_DIVERS` | Documents de marché de l'entreprise, pas des livrables SPS. `05` est acceptable. |
+| 7.2025.429 | `Certificat de capacité.docx` | `05_DIVERS` | Document administratif envoyé par le secrétariat. |
+
+Ces cas sont peu nombreux. Il est plus simple de les corriger à la main après la copie que de changer les règles.
+**Avis : le journal peut être validé pour la copie réelle de la semaine.**
